@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git remote:*)",
+      "Bash(git push:*)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(ssh-keygen -F github.com)",
+      "Bash(mkdir -p ~/.ssh)",
+      "Bash(ssh-keyscan github.com)",
+      "Bash(~/.ssh/known_hosts)",
+      "Bash(gh --version)",
+      "Read(//c/Users/SebastianHornbaek/.ssh/**)"
+    ]
+  }
+}
