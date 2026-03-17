@@ -1,24 +1,64 @@
 // ── Constants ──────────────────────────────────────────────
 const G = 30;
-const THRUST_POWER = 150;
+const THRUST_POWER = 200;
 const ROTATION_SPEED = 3.0;
 const FUEL_MAX = 100;
 const FUEL_RATE = 4;
 const SAFE_LANDING_SPEED = 50;
 const SHIP_RADIUS = 8;
-const PREDICTION_STEPS = 500;
+const PREDICTION_STEPS = 800;
 const PREDICTION_DT = 0.1;
 
 // ── Planets ────────────────────────────────────────────────
 function createPlanets() {
     return [
-        { name: 'Sol',     x: 0,     y: 0,     radius: 80, mass: 50000, color: '#FFD700', glow: '#FFA500' },
-        { name: 'Mercury', x: 600,   y: 0,     radius: 15, mass: 800,   color: '#A0522D', glow: '#8B4513' },
-        { name: 'Terra',   x: 0,     y: -1200, radius: 30, mass: 3000,  color: '#4169E1', glow: '#1E90FF' },
-        { name: 'Mars',    x: -2000, y: 400,   radius: 22, mass: 1500,  color: '#CD5C5C', glow: '#B22222' },
-        { name: 'Jupiter', x: 1500,  y: 2500,  radius: 55, mass: 20000, color: '#DAA520', glow: '#B8860B' },
-        { name: 'Pluto',   x: -3500, y: -3000, radius: 10, mass: 400,   color: '#B0C4DE', glow: '#778899' },
+        { name: 'Sol',     x: 0,      y: 0,      radius: 320, mass: 200000, color: '#FFD700', glow: '#FFA500' },
+        { name: 'Mercury', x: 2400,   y: 0,      radius: 50,  mass: 3200,   color: '#A0522D', glow: '#8B4513' },
+        { name: 'Terra',   x: 0,      y: -5000,  radius: 120, mass: 12000,  color: '#4169E1', glow: '#1E90FF' },
+        { name: 'Mars',    x: -8000,  y: 1600,   radius: 85,  mass: 6000,   color: '#CD5C5C', glow: '#B22222' },
+        { name: 'Jupiter', x: 6000,   y: 10000,  radius: 220, mass: 80000,  color: '#DAA520', glow: '#B8860B' },
+        { name: 'Pluto',   x: -14000, y: -12000, radius: 35,  mass: 1400,   color: '#B0C4DE', glow: '#778899' },
     ];
+}
+
+// ── Moons ──────────────────────────────────────────────────
+function createMoons(planets) {
+    const defs = [
+        { name: 'Luna',     parent: 'Terra',   radius: 25, mass: 800, color: '#C0C0C0', glow: '#808080', orbitDist: 350, orbitSpeed: 0.3,  startAngle: 0 },
+        { name: 'Phobos',   parent: 'Mars',    radius: 12, mass: 200, color: '#B08060', glow: '#806040', orbitDist: 220, orbitSpeed: 0.6,  startAngle: 0 },
+        { name: 'Io',       parent: 'Jupiter', radius: 20, mass: 500, color: '#E8D44D', glow: '#B8A030', orbitDist: 400, orbitSpeed: 0.5,  startAngle: 0 },
+        { name: 'Europa',   parent: 'Jupiter', radius: 18, mass: 400, color: '#D4CFC0', glow: '#A09880', orbitDist: 550, orbitSpeed: 0.35, startAngle: 2.1 },
+        { name: 'Ganymede', parent: 'Jupiter', radius: 28, mass: 700, color: '#A89080', glow: '#786050', orbitDist: 720, orbitSpeed: 0.22, startAngle: 4.2 },
+    ];
+
+    return defs.map(d => {
+        const parentPlanet = planets.find(p => p.name === d.parent);
+        const angle = d.startAngle;
+        return {
+            name: d.name,
+            x: parentPlanet.x + Math.cos(angle) * d.orbitDist,
+            y: parentPlanet.y + Math.sin(angle) * d.orbitDist,
+            radius: d.radius,
+            mass: d.mass,
+            color: d.color,
+            glow: d.glow,
+            orbit: {
+                parent: d.parent,
+                distance: d.orbitDist,
+                speed: d.orbitSpeed,
+                angle: angle,
+            },
+        };
+    });
+}
+
+function updateMoons(moons, planets, dt) {
+    for (const m of moons) {
+        m.orbit.angle += m.orbit.speed * dt;
+        const parent = planets.find(p => p.name === m.orbit.parent);
+        m.x = parent.x + Math.cos(m.orbit.angle) * m.orbit.distance;
+        m.y = parent.y + Math.sin(m.orbit.angle) * m.orbit.distance;
+    }
 }
 
 // ── Ship ───────────────────────────────────────────────────
@@ -55,9 +95,10 @@ function resetShip(ship, planets) {
 }
 
 // ── Gravity ────────────────────────────────────────────────
-function computeGravity(x, y, planets) {
+function computeGravity(x, y, planets, moons) {
     let ax = 0, ay = 0;
-    for (const p of planets) {
+    const bodies = moons ? [...planets, ...moons] : planets;
+    for (const p of bodies) {
         const dx = p.x - x;
         const dy = p.y - y;
         let distSq = dx * dx + dy * dy;
@@ -72,7 +113,7 @@ function computeGravity(x, y, planets) {
 }
 
 // ── Ship Update ────────────────────────────────────────────
-function updateShip(ship, planets, keys, dt) {
+function updateShip(ship, planets, moons, keys, dt) {
     // Handle crash timer
     if (ship.crashed) {
         ship.crashTimer -= dt;
@@ -99,14 +140,14 @@ function updateShip(ship, planets, keys, dt) {
         if (keys.up && ship.fuel > 0) {
             // Takeoff
             ship.landed = null;
-            ship.vx = Math.cos(ship.angle) * 40;
-            ship.vy = Math.sin(ship.angle) * 40;
+            ship.vx = Math.cos(ship.angle) * 60;
+            ship.vy = Math.sin(ship.angle) * 60;
         }
         return;
     }
 
     // Gravity
-    const grav = computeGravity(ship.x, ship.y, planets);
+    const grav = computeGravity(ship.x, ship.y, planets, moons);
     let ax = grav.ax;
     let ay = grav.ay;
 
@@ -135,8 +176,9 @@ function updateShip(ship, planets, keys, dt) {
     ship.x += ship.vx * dt;
     ship.y += ship.vy * dt;
 
-    // Collision detection
-    for (const p of planets) {
+    // Collision detection (planets + moons)
+    const allBodies = [...planets, ...moons];
+    for (const p of allBodies) {
         const dx = ship.x - p.x;
         const dy = ship.y - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -163,23 +205,24 @@ function updateShip(ship, planets, keys, dt) {
 }
 
 // ── Orbit prediction ───────────────────────────────────────
-function predictTrajectory(ship, planets) {
+function predictTrajectory(ship, planets, moons) {
     if (ship.landed || ship.crashed) return [];
 
     const points = [];
     let px = ship.x, py = ship.y;
     let pvx = ship.vx, pvy = ship.vy;
+    const allBodies = [...planets, ...moons];
 
     for (let i = 0; i < PREDICTION_STEPS; i++) {
-        const grav = computeGravity(px, py, planets);
+        const grav = computeGravity(px, py, planets, moons);
         pvx += grav.ax * PREDICTION_DT;
         pvy += grav.ay * PREDICTION_DT;
         px += pvx * PREDICTION_DT;
         py += pvy * PREDICTION_DT;
 
-        // Stop if predicted to hit a planet
+        // Stop if predicted to hit a body
         let hit = false;
-        for (const p of planets) {
+        for (const p of allBodies) {
             const dx = px - p.x;
             const dy = py - p.y;
             if (dx * dx + dy * dy < (p.radius + SHIP_RADIUS) * (p.radius + SHIP_RADIUS)) {
@@ -194,13 +237,14 @@ function predictTrajectory(ship, planets) {
 }
 
 // ── Orbit detection ────────────────────────────────────────
-function getOrbitInfo(ship, planets) {
+function getOrbitInfo(ship, planets, moons) {
     if (ship.landed || ship.crashed) return null;
 
     let nearest = null;
     let nearestDist = Infinity;
 
-    for (const p of planets) {
+    const allBodies = [...planets, ...moons];
+    for (const p of allBodies) {
         const dx = ship.x - p.x;
         const dy = ship.y - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Engine nozzle -->
+  <rect x="2" y="12" width="5" height="8" rx="1" fill="#404040"/>
+  <rect x="3" y="13" width="3" height="6" rx="0.5" fill="#555"/>
+
+  <!-- Main body / fuselage -->
+  <path d="M6 10 L22 10 Q28 16 22 22 L6 22 Q4 16 6 10 Z" fill="#a0a0a0" stroke="#888" stroke-width="0.5"/>
+
+  <!-- Body highlight -->
+  <path d="M8 11 L20 11 Q25 16 20 21 L8 21 Q6 16 8 11 Z" fill="#b8b8b8" opacity="0.5"/>
+
+  <!-- Nose cone -->
+  <path d="M22 10 L30 15.5 Q30.5 16 30 16.5 L22 22 Q26 16 22 10 Z" fill="#d0d0d0" stroke="#999" stroke-width="0.4"/>
+
+  <!-- Top fin -->
+  <path d="M8 10 L5 4 L12 9 Z" fill="#707070" stroke="#555" stroke-width="0.4"/>
+
+  <!-- Bottom fin -->
+  <path d="M8 22 L5 28 L12 23 Z" fill="#707070" stroke="#555" stroke-width="0.4"/>
+
+  <!-- Cockpit window -->
+  <ellipse cx="22" cy="16" rx="3" ry="2.5" fill="#2a5a7a" stroke="#4488aa" stroke-width="0.5"/>
+  <ellipse cx="21.5" cy="15.3" rx="1.5" ry="1" fill="#5599bb" opacity="0.6"/>
+
+  <!-- Panel lines -->
+  <line x1="14" y1="10.5" x2="14" y2="21.5" stroke="#888" stroke-width="0.3" opacity="0.5"/>
+  <line x1="18" y1="10.5" x2="18" y2="21.5" stroke="#888" stroke-width="0.3" opacity="0.5"/>
+</svg>

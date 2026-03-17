@@ -9,21 +9,36 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
+// ── SVG Ship Image ─────────────────────────────────────────
+const shipImage = new Image();
+shipImage.src = 'ship.svg';
+let shipImageLoaded = false;
+shipImage.onload = () => { shipImageLoaded = true; };
+
 // ── World State ────────────────────────────────────────────
 const planets = createPlanets();
+const moons = createMoons(planets);
 const ship = createShip(planets);
-const camera = { x: ship.x, y: ship.y, zoom: 1.0 };
+const camera = { x: ship.x, y: ship.y, zoom: 3.0 }; // start zoomed in (landed)
 const keys = { up: false, down: false, left: false, right: false };
 let gameTime = 0;
 let showHelp = true;
 let helpTimer = 10;
 
+// ── Camera Zoom Animation ──────────────────────────────────
+const LANDED_ZOOM = 3.0;
+const FLYING_ZOOM = 0.5;
+const ZOOM_LERP = 0.03;
+let targetZoom = LANDED_ZOOM; // start landed
+let zoomAnimating = true;
+
 // ── Starfield ──────────────────────────────────────────────
+// Stars are in screen-space pixels, tiled across the viewport
 const stars = [];
 for (let i = 0; i < 300; i++) {
     stars.push({
-        x: (Math.random() - 0.5) * 20000,
-        y: (Math.random() - 0.5) * 20000,
+        x: Math.random() * 2000,
+        y: Math.random() * 2000,
         size: Math.random() * 1.5 + 0.5,
         brightness: Math.random() * 0.5 + 0.5,
     });
@@ -36,7 +51,7 @@ function keyHandler(e, pressed) {
         case 'ArrowDown':  case 'KeyS': keys.down = pressed; break;
         case 'ArrowLeft':  case 'KeyA': keys.left = pressed; break;
         case 'ArrowRight': case 'KeyD': keys.right = pressed; break;
-        case 'KeyR': if (pressed) resetShip(ship, planets); break;
+        case 'KeyR': if (pressed) { resetShip(ship, planets); targetZoom = LANDED_ZOOM; zoomAnimating = true; } break;
     }
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
         e.preventDefault();
@@ -47,7 +62,8 @@ window.addEventListener('keyup', e => keyHandler(e, false));
 
 window.addEventListener('wheel', e => {
     camera.zoom *= e.deltaY > 0 ? 0.9 : 1.1;
-    camera.zoom = Math.max(0.05, Math.min(5, camera.zoom));
+    camera.zoom = Math.max(0.02, Math.min(8, camera.zoom));
+    zoomAnimating = false; // user override
     e.preventDefault();
 }, { passive: false });
 
@@ -61,11 +77,15 @@ function worldToScreen(wx, wy) {
 
 // ── Rendering ──────────────────────────────────────────────
 function drawStarfield() {
-    const parallax = 0.1;
+    // Stars are drawn in pure screen-space with a slow parallax drift.
+    // No zoom scaling — stars stay fixed like a distant backdrop.
+    const parallax = 0.03;
+    const offsetX = -camera.x * parallax;
+    const offsetY = -camera.y * parallax;
     for (const s of stars) {
-        const sx = (s.x - camera.x * parallax) * camera.zoom + canvas.width / 2;
-        const sy = (s.y - camera.y * parallax) * camera.zoom + canvas.height / 2;
-        // Wrap stars to always be visible
+        const sx = s.x + offsetX;
+        const sy = s.y + offsetY;
+        // Tile stars to always fill the screen
         const wx = ((sx % canvas.width) + canvas.width) % canvas.width;
         const wy = ((sy % canvas.height) + canvas.height) % canvas.height;
         const alpha = s.brightness * (0.7 + 0.3 * Math.sin(gameTime * 2 + s.x));
@@ -108,9 +128,29 @@ function drawPlanet(p) {
     // Name label
     if (r > 5) {
         ctx.fillStyle = '#aaa';
-        ctx.font = `${Math.max(10, Math.min(14, r * 0.5))}px 'Courier New', monospace`;
+        ctx.font = `${Math.max(10, Math.min(16, r * 0.15))}px 'Courier New', monospace`;
         ctx.textAlign = 'center';
-        ctx.fillText(p.name, scr.x, scr.y + r + 16);
+        ctx.fillText(p.name, scr.x, scr.y + r + 18);
+    }
+}
+
+function drawMoonOrbits() {
+    for (const m of moons) {
+        const parent = planets.find(p => p.name === m.orbit.parent);
+        const scr = worldToScreen(parent.x, parent.y);
+        const orbitR = m.orbit.distance * camera.zoom;
+
+        // Skip if orbit circle is off screen
+        if (scr.x + orbitR < -50 || scr.x - orbitR > canvas.width + 50 ||
+            scr.y + orbitR < -50 || scr.y - orbitR > canvas.height + 50) continue;
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 8]);
+        ctx.beginPath();
+        ctx.arc(scr.x, scr.y, orbitR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
     }
 }
 
@@ -139,14 +179,13 @@ function drawShip() {
     ctx.translate(scr.x, scr.y);
     ctx.rotate(angle);
 
-    // Thrust flame
+    // Thrust flame (drawn before ship so it appears behind)
     if ((ship.thrustOn || ship.retroOn) && !ship.landed) {
         const flicker = 0.7 + Math.random() * 0.6;
         const flameLen = size * 2 * flicker;
 
         ctx.save();
         if (ship.retroOn && !ship.thrustOn) {
-            // Retrograde flame comes from front
             ctx.fillStyle = '#4488ff';
             ctx.beginPath();
             ctx.moveTo(size * 0.8, -size * 0.3);
@@ -155,7 +194,6 @@ function drawShip() {
             ctx.fill();
         }
         if (ship.thrustOn) {
-            // Main engine flame
             const flameGrad = ctx.createLinearGradient(-size, 0, -size - flameLen, 0);
             flameGrad.addColorStop(0, '#fff');
             flameGrad.addColorStop(0.2, '#ffaa00');
@@ -171,24 +209,29 @@ function drawShip() {
         ctx.restore();
     }
 
-    // Ship body (triangle)
-    ctx.fillStyle = '#e0e0e0';
-    ctx.strokeStyle = '#888';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(size, 0);
-    ctx.lineTo(-size * 0.7, -size * 0.6);
-    ctx.lineTo(-size * 0.4, 0);
-    ctx.lineTo(-size * 0.7, size * 0.6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    // Ship body — SVG or fallback triangle
+    if (shipImageLoaded) {
+        const drawSize = size * 2.5;
+        ctx.drawImage(shipImage, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+    } else {
+        ctx.fillStyle = '#e0e0e0';
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(size, 0);
+        ctx.lineTo(-size * 0.7, -size * 0.6);
+        ctx.lineTo(-size * 0.4, 0);
+        ctx.lineTo(-size * 0.7, size * 0.6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    }
 
     ctx.restore();
 }
 
 function drawPredictionLine() {
-    const trajectory = predictTrajectory(ship, planets);
+    const trajectory = predictTrajectory(ship, planets, moons);
     if (trajectory.length === 0) return;
 
     ctx.beginPath();
@@ -215,7 +258,7 @@ function drawMinimap() {
     const mx = canvas.width - mw - 15;
     const my = 15;
 
-    // Find bounds of all planets
+    // Find bounds of planets only (moons orbit close to parents)
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of planets) {
         minX = Math.min(minX, p.x - p.radius);
@@ -223,7 +266,7 @@ function drawMinimap() {
         minY = Math.min(minY, p.y - p.radius);
         maxY = Math.max(maxY, p.y + p.radius);
     }
-    const padding = 200;
+    const padding = 800;
     minX -= padding; maxX += padding; minY -= padding; maxY += padding;
     const scaleX = mw / (maxX - minX);
     const scaleY = mh / (maxY - minY);
@@ -249,11 +292,23 @@ function drawMinimap() {
     // Planets
     for (const p of planets) {
         const mp = miniPos(p.x, p.y);
-        const r = Math.max(2, p.radius * scale);
+        const r = Math.max(3, p.radius * scale);
         ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(mp.x, mp.y, r, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    // Moons
+    for (const m of moons) {
+        const mp = miniPos(m.x, m.y);
+        const r = Math.max(2, m.radius * scale);
+        ctx.fillStyle = m.color;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(mp.x, mp.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
     }
 
     // Ship
@@ -273,8 +328,8 @@ function drawMinimap() {
 }
 
 function drawUI() {
-    const info = getOrbitInfo(ship, planets);
-    const lh = 20; // line height
+    const info = getOrbitInfo(ship, planets, moons);
+    const lh = 20;
     let y = 30;
 
     ctx.font = '14px "Courier New", monospace';
@@ -295,7 +350,7 @@ function drawUI() {
     ctx.fillText(`FUEL: ${Math.ceil(ship.fuel)}%`, barX + barW + 10, y);
     y += lh + 8;
 
-    // Speed
+    // Speed & orbit info
     if (info) {
         ctx.fillStyle = '#aaa';
         ctx.fillText(`SPEED: ${info.speed.toFixed(1)} u/s`, 20, y);
@@ -347,6 +402,7 @@ function drawUI() {
 
 // ── Game Loop ──────────────────────────────────────────────
 let lastTime = 0;
+let wasLanded = true; // track state transitions
 
 function loop(timestamp) {
     const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
@@ -359,8 +415,30 @@ function loop(timestamp) {
         if (helpTimer <= 0) showHelp = false;
     }
 
+    // Update moons
+    updateMoons(moons, planets, dt);
+
     // Update physics
-    updateShip(ship, planets, keys, dt);
+    updateShip(ship, planets, moons, keys, dt);
+
+    // Camera zoom animation — trigger on state change
+    if (ship.landed && !wasLanded) {
+        targetZoom = LANDED_ZOOM;
+        zoomAnimating = true;
+    }
+    if (!ship.landed && !ship.crashed && wasLanded) {
+        targetZoom = FLYING_ZOOM;
+        zoomAnimating = true;
+    }
+    wasLanded = !!ship.landed;
+
+    if (zoomAnimating) {
+        camera.zoom += (targetZoom - camera.zoom) * ZOOM_LERP;
+        if (Math.abs(camera.zoom - targetZoom) < 0.01) {
+            camera.zoom = targetZoom;
+            if (!ship.landed) zoomAnimating = false;
+        }
+    }
 
     // Camera follow
     camera.x += (ship.x - camera.x) * 0.05;
@@ -372,8 +450,10 @@ function loop(timestamp) {
 
     // Draw world
     drawStarfield();
+    drawMoonOrbits();
     drawPredictionLine();
     for (const p of planets) drawPlanet(p);
+    for (const m of moons) drawPlanet(m);
     drawShip();
 
     // Draw UI
