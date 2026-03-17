@@ -4,15 +4,95 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Space Simulator</title>
+    <link rel="stylesheet" href="ui.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #000; overflow: hidden; }
-        canvas { display: block; }
+        canvas#gameCanvas { display: block; position: relative; z-index: 1; }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+
+    <!-- Solar System Map Overlay — fully canvas-rendered -->
+    <div id="solar-map" class="hidden">
+        <canvas id="mapCanvas"></canvas>
+    </div>
+
+    <!-- Game UI Panel -->
+    <div id="game-panel" class="hidden">
+        <div class="panel-tabs">
+            <button data-tab="nav" class="active">NAV</button>
+            <button data-tab="inv">INV</button>
+            <button data-tab="ops">OPS</button>
+            <button data-tab="comms">COM</button>
+            <button data-tab="cargo">CRG</button>
+            <button data-tab="mining">MIN</button>
+        </div>
+        <div class="panel-content">
+            <!-- Navigation -->
+            <div id="tab-nav" class="tab-content active">
+                <div class="section-title">POSITION</div>
+                <div class="stat-row"><span class="stat-label">X</span><span class="stat-value" id="nav-x">0</span></div>
+                <div class="stat-row"><span class="stat-label">Y</span><span class="stat-value" id="nav-y">0</span></div>
+                <div class="stat-row"><span class="stat-label">SPEED</span><span class="stat-value" id="nav-speed">0</span></div>
+                <div class="stat-row"><span class="stat-label">NEAREST</span><span class="stat-value" id="nav-nearest">---</span></div>
+                <div class="stat-row"><span class="stat-label">DISTANCE</span><span class="stat-value" id="nav-dist">---</span></div>
+                <div class="section-title" style="margin-top:16px">ROUTE</div>
+                <div class="stat-row"><span class="stat-label">WAYPOINTS</span><span class="stat-value highlight" id="nav-wps">0</span></div>
+                <div class="stat-row"><span class="stat-label">TOTAL DIST</span><span class="stat-value highlight" id="nav-rdist">---</span></div>
+                <div id="nav-route-list" class="route-list"></div>
+            </div>
+
+            <!-- Inventory -->
+            <div id="tab-inv" class="tab-content">
+                <div class="section-title">INVENTORY</div>
+                <div class="inventory-grid" id="inv-grid"></div>
+            </div>
+
+            <!-- Ship Operations -->
+            <div id="tab-ops" class="tab-content">
+                <div class="section-title">SHIP OPERATIONS</div>
+                <button class="ops-btn" disabled><span class="ops-label">SCAN AREA</span><span class="ops-sub">(System Offline)</span></button>
+                <button class="ops-btn" disabled><span class="ops-label">DEPLOY PROBE</span><span class="ops-sub">(System Offline)</span></button>
+                <button class="ops-btn" disabled><span class="ops-label">REPAIR HULL</span><span class="ops-sub">(System Offline)</span></button>
+                <button class="ops-btn" disabled><span class="ops-label">REFUEL</span><span class="ops-sub">(System Offline)</span></button>
+            </div>
+
+            <!-- Communications -->
+            <div id="tab-comms" class="tab-content">
+                <div class="section-title">COMMUNICATIONS</div>
+                <div class="comms-terminal">
+                    [SYSTEM] Comm array initialized...<br>
+                    [SYSTEM] Scanning frequencies...<br>
+                    [NO SIGNAL] No transmissions detected.<br>
+                    <br>
+                    Awaiting signal<span class="blink">_</span>
+                </div>
+            </div>
+
+            <!-- Cargo -->
+            <div id="tab-cargo" class="tab-content">
+                <div class="section-title">CARGO MANIFEST</div>
+                <table class="cargo-table">
+                    <thead><tr><th>ITEM</th><th>QTY</th><th>MASS</th></tr></thead>
+                    <tbody><tr><td colspan="3">No cargo loaded</td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- Mining -->
+            <div id="tab-mining" class="tab-content">
+                <div class="section-title">MINING SYSTEMS</div>
+                <div class="mining-placeholder">
+                    <div class="big">NO MINING EQUIPMENT INSTALLED</div>
+                    <div class="sub">Visit a station to purchase mining modules</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="physics.js"></script>
     <script src="game.js"></script>
+    <script src="ui.js"></script>
 </body>
 </html>

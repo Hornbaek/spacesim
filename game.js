@@ -25,6 +25,12 @@ let gameTime = 0;
 let showHelp = true;
 let helpTimer = 10;
 
+// ── Route & Overlay State ─────────────────────────────────
+const route = [];          // [{x, y}, ...] world-coordinate waypoints
+let mapOpen = false;
+let panelOpen = false;
+let gamePaused = false;
+
 // ── Camera Zoom Animation ──────────────────────────────────
 const LANDED_ZOOM = 3.0;
 const FLYING_ZOOM = 0.5;
@@ -46,6 +52,18 @@ for (let i = 0; i < 300; i++) {
 
 // ── Input ──────────────────────────────────────────────────
 function keyHandler(e, pressed) {
+    // Map and panel toggles always work
+    if (pressed) {
+        if (e.code === 'KeyM') { toggleMap(); e.preventDefault(); return; }
+        if (e.code === 'Tab') { togglePanel(); e.preventDefault(); return; }
+        if (e.code === 'Escape') {
+            if (mapOpen) { toggleMap(); e.preventDefault(); return; }
+            if (panelOpen) { togglePanel(); e.preventDefault(); return; }
+        }
+    }
+    // Block ship controls when game is paused (map open)
+    if (gamePaused) return;
+
     switch (e.code) {
         case 'ArrowUp':    case 'KeyW': keys.up = pressed; break;
         case 'ArrowDown':  case 'KeyS': keys.down = pressed; break;
@@ -253,6 +271,49 @@ function drawPredictionLine() {
     ctx.stroke();
 }
 
+function drawRoute() {
+    if (route.length < 1) return;
+
+    ctx.save();
+    ctx.setLineDash([12, 8]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0, 220, 180, 0.6)';
+    ctx.beginPath();
+
+    // Start line from ship
+    const shipScr = worldToScreen(ship.x, ship.y);
+    ctx.moveTo(shipScr.x, shipScr.y);
+
+    for (let i = 0; i < route.length; i++) {
+        const wp = worldToScreen(route[i].x, route[i].y);
+        ctx.lineTo(wp.x, wp.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw waypoint markers
+    for (let i = 0; i < route.length; i++) {
+        const wp = worldToScreen(route[i].x, route[i].y);
+
+        // Diamond marker
+        ctx.fillStyle = 'rgba(0, 220, 180, 0.8)';
+        ctx.beginPath();
+        ctx.moveTo(wp.x, wp.y - 8);
+        ctx.lineTo(wp.x + 6, wp.y);
+        ctx.lineTo(wp.x, wp.y + 8);
+        ctx.lineTo(wp.x - 6, wp.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Waypoint number
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(i + 1, wp.x, wp.y - 12);
+    }
+    ctx.restore();
+}
+
 function drawMinimap() {
     const mw = 200, mh = 200;
     const mx = canvas.width - mw - 15;
@@ -317,6 +378,22 @@ function drawMinimap() {
     ctx.beginPath();
     ctx.arc(sp.x, sp.y, 3, 0, Math.PI * 2);
     ctx.fill();
+
+    // Route on minimap
+    if (route.length > 0) {
+        ctx.strokeStyle = 'rgba(0, 220, 180, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        const rsp = miniPos(ship.x, ship.y);
+        ctx.moveTo(rsp.x, rsp.y);
+        for (const wp of route) {
+            const mp = miniPos(wp.x, wp.y);
+            ctx.lineTo(mp.x, mp.y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
 
     // View rectangle
     const viewW = canvas.width / camera.zoom;
@@ -396,7 +473,7 @@ function drawUI() {
         ctx.fillStyle = `rgba(170, 170, 170, ${alpha})`;
         ctx.font = '12px "Courier New", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('W/S: Thrust/Brake  |  A/D: Rotate  |  Scroll: Zoom  |  R: Reset', canvas.width / 2, canvas.height - 15);
+        ctx.fillText('W/S: Thrust/Brake  |  A/D: Rotate  |  Scroll: Zoom  |  M: Map  |  Tab: Panel  |  R: Reset', canvas.width / 2, canvas.height - 15);
     }
 }
 
@@ -415,34 +492,36 @@ function loop(timestamp) {
         if (helpTimer <= 0) showHelp = false;
     }
 
-    // Update moons
-    updateMoons(moons, planets, dt);
+    if (!gamePaused) {
+        // Update moons
+        updateMoons(moons, planets, dt);
 
-    // Update physics
-    updateShip(ship, planets, moons, keys, dt);
+        // Update physics
+        updateShip(ship, planets, moons, keys, dt);
 
-    // Camera zoom animation — trigger on state change
-    if (ship.landed && !wasLanded) {
-        targetZoom = LANDED_ZOOM;
-        zoomAnimating = true;
-    }
-    if (!ship.landed && !ship.crashed && wasLanded) {
-        targetZoom = FLYING_ZOOM;
-        zoomAnimating = true;
-    }
-    wasLanded = !!ship.landed;
-
-    if (zoomAnimating) {
-        camera.zoom += (targetZoom - camera.zoom) * ZOOM_LERP;
-        if (Math.abs(camera.zoom - targetZoom) < 0.01) {
-            camera.zoom = targetZoom;
-            if (!ship.landed) zoomAnimating = false;
+        // Camera zoom animation — trigger on state change
+        if (ship.landed && !wasLanded) {
+            targetZoom = LANDED_ZOOM;
+            zoomAnimating = true;
         }
-    }
+        if (!ship.landed && !ship.crashed && wasLanded) {
+            targetZoom = FLYING_ZOOM;
+            zoomAnimating = true;
+        }
+        wasLanded = !!ship.landed;
 
-    // Camera follow
-    camera.x += (ship.x - camera.x) * 0.05;
-    camera.y += (ship.y - camera.y) * 0.05;
+        if (zoomAnimating) {
+            camera.zoom += (targetZoom - camera.zoom) * ZOOM_LERP;
+            if (Math.abs(camera.zoom - targetZoom) < 0.01) {
+                camera.zoom = targetZoom;
+                if (!ship.landed) zoomAnimating = false;
+            }
+        }
+
+        // Camera follow
+        camera.x += (ship.x - camera.x) * 0.05;
+        camera.y += (ship.y - camera.y) * 0.05;
+    }
 
     // Clear
     ctx.fillStyle = '#000';
@@ -451,6 +530,7 @@ function loop(timestamp) {
     // Draw world
     drawStarfield();
     drawMoonOrbits();
+    drawRoute();
     drawPredictionLine();
     for (const p of planets) drawPlanet(p);
     for (const m of moons) drawPlanet(m);
